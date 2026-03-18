@@ -132,8 +132,8 @@
   .post-item.protected { border-color: rgba(45,212,191,0.5); background: rgba(45,212,191,0.04); }
   .badge-protected { background: rgba(45,212,191,0.12); color: var(--teal); border: 1px solid rgba(45,212,191,0.3); }
   .badge-video { background: rgba(192,132,252,0.12); color: #c084fc; border: 1px solid rgba(192,132,252,0.3); }
-  .post-thumb.gallery-size { width: 100%; height: auto; max-height: 480px; object-fit: contain; border-radius: 6px; }
-  body.gallery-mode .post-images { flex-direction: column; gap: 10px; }
+  .post-thumb.gallery-size { width: 100% !important; height: auto !important; max-height: 600px; object-fit: contain !important; border-radius: 6px; cursor: zoom-in; }
+  .post-images.gallery-images { flex-direction: column; gap: 12px; }
   body.gallery-mode .post-list { max-height: none; }
 
   .post-cb { width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; flex-shrink: 0; margin-top: 3px; }
@@ -159,6 +159,9 @@
   .post-images { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .post-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; transition: border-color 0.15s; }
   .post-thumb:hover { border-color: var(--teal); }
+  .repost-from { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 10px; background: rgba(82,214,138,0.05); border-left: 2px solid rgba(82,214,138,0.4); border-radius: 0 4px 4px 0; }
+  .repost-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+  .repost-author { font-family: var(--mono); font-size: 11px; color: var(--success); }
   .post-link { font-family: var(--mono); font-size: 10px; color: var(--text-dimmer); text-decoration: none; letter-spacing: 0.05em; margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; transition: color 0.15s; }
   .post-link:hover { color: var(--teal); }
 
@@ -224,7 +227,9 @@
       <button class="scan-opt active" id="opt-all"     onclick="toggleScanOpt('all')">Everything</button>
       <button class="scan-opt" id="opt-posts"    onclick="toggleScanOpt('posts')">Posts only</button>
       <button class="scan-opt" id="opt-replies"  onclick="toggleScanOpt('replies')">Replies only</button>
-      <button class="scan-opt" id="opt-reposts"  onclick="toggleScanOpt('reposts')">Reposts only</button>
+      <button class="scan-opt" id="opt-reposts"      onclick="toggleScanOpt('reposts')">Reposts only</button>
+      <button class="scan-opt" id="opt-myreposts"   onclick="toggleScanOpt('myreposts')">🔁 My reposts</button>
+      <button class="scan-opt" id="opt-theirreposts" onclick="toggleScanOpt('theirreposts')">🔁 Reposted by others</button>
       <button class="scan-opt" id="opt-quotes"   onclick="toggleScanOpt('quotes')">Quote posts only</button>
       <button class="scan-opt" id="opt-pictures" onclick="toggleScanOpt('pictures')">🖼 Pictures only</button>
       <button class="scan-opt" id="opt-videos"   onclick="toggleScanOpt('videos')">🎬 Videos only</button>
@@ -305,9 +310,13 @@
         <span class="sort-label">Sort by:</span>
         <button class="btn btn-ghost btn-sm active" id="sort-date" onclick="setSort('date')">Date ↓</button>
         <button class="btn btn-ghost btn-sm" id="sort-likes" onclick="setSort('likes')">Likes</button>
-        <button class="btn btn-ghost btn-sm" id="sort-reposts" onclick="setSort('reposts')">Reposts</button>
+        <button class="btn btn-ghost btn-sm" id="sort-reposts"      onclick="setSort('reposts')">Reposts</button>
+        <button class="btn btn-ghost btn-sm" id="sort-myreposts"   onclick="setSort('myreposts')">🔁 My reposts</button>
+        <button class="btn btn-ghost btn-sm" id="sort-theirreposts" onclick="setSort('theirreposts')">🔁 Reposted by others</button>
         <button class="btn btn-ghost btn-sm" id="sort-replies" onclick="setSort('replies')">Replies</button>
-        <button class="btn btn-ghost btn-sm" id="sort-quotes" onclick="setSort('quotes')">Quotes</button>
+        <button class="btn btn-ghost btn-sm" id="sort-quotes"    onclick="setSort('quotes')">Quotes</button>
+        <button class="btn btn-ghost btn-sm" id="sort-pictures" onclick="setSort('pictures')">🖼 Pictures</button>
+        <button class="btn btn-ghost btn-sm" id="sort-videos"   onclick="setSort('videos')">🎬 Videos</button>
       </div>
 
       <!-- Threshold preview -->
@@ -350,7 +359,7 @@ let session = null;
 let allPosts = [];       // all fetched posts
 let filtered = [];       // currently displayed posts
 let cursor = null;       // for pagination
-let scanMode = 'all'; // all | posts | replies | reposts | quotes | pictures | videos
+let scanMode = 'all'; // all | posts | replies | reposts | myreposts | theirreposts | quotes | pictures | videos
 let galleryMode = false;
 let sortMode = 'date';
 let showMode = 'all';
@@ -363,7 +372,7 @@ const $ = id => document.getElementById(id);
 // ── Scan opt toggle ────────────────────────────────────────────────────────
 function toggleScanOpt(opt) {
   scanMode = opt;
-  ['all','posts','replies','reposts','quotes','pictures','videos'].forEach(o => {
+  ['all','posts','replies','reposts','myreposts','theirreposts','quotes','pictures','videos'].forEach(o => {
     $('opt-' + o).classList.toggle('active', o === opt);
   });
   if (allPosts.length > 0) applyFilters();
@@ -444,10 +453,10 @@ async function fetchPosts(reset = false) {
     const items = data.feed || [];
     items.forEach(item => {
       const post = item.post;
-      // Only include the user's own posts
-      if (post.author.did !== session.did) return;
-
       const isRepost = item.reason?.$type === 'app.bsky.feed.defs#reasonRepost';
+      // For reposts the post author is someone else — allow those through
+      // For everything else, only include the user's own posts
+      if (!isRepost && post.author.did !== session.did) return;
       const isReply  = !isRepost && !!post.record?.reply;
       const isQuote  = !isRepost && !isReply && (
         post.record?.embed?.$type === 'app.bsky.embed.record' ||
@@ -468,17 +477,36 @@ async function fetchPosts(reset = false) {
           (media.images || []).forEach(img => { if (img.thumb || img.fullsize) images.push(img.thumb || img.fullsize); });
           if (media.$type === 'app.bsky.embed.video#view' || media.$type === 'app.bsky.embed.video') {
             hasVideo = true;
-            videoThumb = media.thumbnail || null;
+            videoThumb = typeof media.thumbnail === 'string' ? media.thumbnail
+                       : media.thumbnail?.ref?.$link ? `https://video.bsky.app/watch/${session.did}/${media.thumbnail.ref.$link}/thumbnail.jpg`
+                       : media.cid ? `https://video.bsky.app/watch/${session.did}/${media.cid}/thumbnail.jpg`
+                       : null;
           }
         }
         if (embed.$type === 'app.bsky.embed.video#view' || embed.$type === 'app.bsky.embed.video') {
           hasVideo = true;
-          videoThumb = embed.thumbnail || null;
+          // #view type returns thumbnail as a direct CDN URL string
+          // non-view type stores it as a blob ref — not directly usable
+          videoThumb = typeof embed.thumbnail === 'string' ? embed.thumbnail
+                     : embed.thumbnail?.ref?.$link ? `https://video.bsky.app/watch/${session.did}/${embed.thumbnail.ref.$link}/thumbnail.jpg`
+                     : embed.cid ? `https://video.bsky.app/watch/${session.did}/${embed.cid}/thumbnail.jpg`
+                     : null;
         }
       }
 
       const rkey = post.uri.split('/').pop();
       const postUrl = `https://bsky.app/profile/${encodeURIComponent(post.author.handle)}/post/${rkey}`;
+
+      // For reposts: store original author info + the repost record URI
+      // item.reason.uri is the AT URI of OUR repost record (what we delete)
+      const repostRecordUri = isRepost ? (item.reason?.uri || null) : null;
+      const repostOf = isRepost ? {
+        handle:      post.author.handle,
+        displayName: post.author.displayName || post.author.handle,
+        avatar:      post.author.avatar || null,
+        text:        post.record?.text || '',
+        postUrl
+      } : null;
 
       allPosts.push({
         uri: post.uri,
@@ -492,6 +520,8 @@ async function fetchPosts(reset = false) {
         isReply,
         isRepost,
         isQuote,
+        repostRecordUri,
+        repostOf,
         images,
         hasVideo,
         videoThumb,
@@ -555,7 +585,9 @@ function applyFilters() {
   // Filter by scan mode
   if (scanMode === 'posts')   pool = pool.filter(p => !p.isReply && !p.isRepost && !p.isQuote);
   if (scanMode === 'replies') pool = pool.filter(p => p.isReply);
-  if (scanMode === 'reposts') pool = pool.filter(p => p.isRepost);
+  if (scanMode === 'reposts')      pool = pool.filter(p => p.isRepost);
+  if (scanMode === 'myreposts')    pool = pool.filter(p => p.isRepost);  // your reposts of others
+  if (scanMode === 'theirreposts') pool = pool.filter(p => !p.isRepost && p.reposts > 0);
   if (scanMode === 'quotes')   pool = pool.filter(p => p.isQuote);
   if (scanMode === 'pictures') pool = pool.filter(p => p.images && p.images.length > 0);
   if (scanMode === 'videos')   pool = pool.filter(p => p.hasVideo);
@@ -584,7 +616,11 @@ function applyFilters() {
     if (sortMode === 'likes')   return b.likes - a.likes;
     if (sortMode === 'reposts') return b.reposts - a.reposts;
     if (sortMode === 'replies') return b.replies - a.replies;
-    if (sortMode === 'quotes')  return b.quotes - a.quotes;
+    if (sortMode === 'quotes')   return b.quotes - a.quotes;
+    if (sortMode === 'myreposts')    return (b.isRepost ? 1 : 0) - (a.isRepost ? 1 : 0);
+    if (sortMode === 'theirreposts') return b.reposts - a.reposts;
+    if (sortMode === 'pictures') return (b.images?.length || 0) - (a.images?.length || 0);
+    if (sortMode === 'videos')   return (b.hasVideo ? 1 : 0) - (a.hasVideo ? 1 : 0);
     return 0;
   });
 
@@ -604,9 +640,18 @@ function applyFilters() {
   updateStats();
 }
 
+function toggleGallery() {
+  galleryMode = !galleryMode;
+  document.body.classList.toggle('gallery-mode', galleryMode);
+  const btn = $('gallery-btn');
+  btn.classList.toggle('active', galleryMode);
+  btn.textContent = galleryMode ? '🖼 Gallery mode ON' : '🖼 Gallery mode';
+  if (allPosts.length > 0) renderPosts();
+}
+
 function setSort(mode) {
   sortMode = mode;
-  ['date','likes','reposts','replies','quotes'].forEach(m => {
+  ['date','likes','reposts','myreposts','theirreposts','replies','quotes','pictures','videos'].forEach(m => {
     $(`sort-${m}`).classList.toggle('active', m === mode);
   });
   applyFilters();
@@ -644,9 +689,24 @@ function renderPosts() {
     const body = document.createElement('div');
     body.className = 'post-body';
 
+    // Repost attribution header
+    if (post.isRepost && post.repostOf) {
+      const rf = document.createElement('div');
+      rf.className = 'repost-from';
+      const avEl = document.createElement('img');
+      avEl.className = 'repost-avatar';
+      avEl.src = post.repostOf.avatar || '';
+      avEl.onerror = () => { avEl.style.display = 'none'; };
+      const authEl = document.createElement('span');
+      authEl.className = 'repost-author';
+      authEl.textContent = `🔁 reposted from @${post.repostOf.handle}`;
+      rf.append(avEl, authEl);
+      body.appendChild(rf);
+    }
+
     const textEl = document.createElement('div');
     textEl.className = 'post-text';
-    textEl.textContent = post.text || '[no text]';
+    textEl.textContent = (post.isRepost && post.repostOf) ? (post.repostOf.text || '[no text]') : (post.text || '[no text]');
     textEl.style.cursor = 'pointer';
     textEl.title = 'Click to expand';
     textEl.addEventListener('click', () => textEl.classList.toggle('expanded'));
@@ -696,11 +756,11 @@ function renderPosts() {
     // Image thumbnails
     if (post.images && post.images.length > 0) {
       const imgRow = document.createElement('div');
-      imgRow.className = 'post-images';
+      imgRow.className = 'post-images' + (galleryMode ? ' gallery-images' : '');
       post.images.forEach(src => {
         const img = document.createElement('img');
         img.src = src;
-        img.className = 'post-thumb';
+        img.className = 'post-thumb' + (galleryMode ? ' gallery-size' : '');
         img.loading = 'lazy';
         img.alt = 'post image';
         img.onclick = () => window.open(src, '_blank');
@@ -758,7 +818,13 @@ function selectBelowThreshold() {
 async function doDeleteSelected() {
   const checked = [...document.querySelectorAll('.post-cb:checked')];
   if (!checked.length) { alert('No posts selected.'); return; }
-  if (!confirm(`Permanently delete ${checked.length} post${checked.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+  const repostCount = checked.filter(cb => allPosts.find(p => p.uri === cb.dataset.uri)?.isRepost).length;
+  const postCount = checked.length - repostCount;
+  const confirmMsg = [
+    postCount   > 0 ? `Delete ${postCount} post${postCount !== 1 ? 's' : ''}` : '',
+    repostCount > 0 ? `un-repost ${repostCount} repost${repostCount !== 1 ? 's' : ''}` : ''
+  ].filter(Boolean).join(' and ') + '? This cannot be undone.';
+  if (!confirm(confirmMsg)) return;
 
   const btn = $('delete-btn');
   btn.disabled = true;
@@ -773,18 +839,29 @@ async function doDeleteSelected() {
     setProgress(Math.round((done / checked.length) * 100), `${done}/${checked.length} deleted`);
 
     try {
-      // uri format: at://did:plc:xxx/app.bsky.feed.post/rkey
-      const parts = uri.replace('at://', '').split('/');
+      let collection, deleteUri;
+      if (post?.isRepost && post?.repostRecordUri) {
+        // Delete the repost record, not the original post
+        deleteUri = post.repostRecordUri;
+        collection = 'app.bsky.feed.repost';
+      } else {
+        deleteUri = uri;
+        collection = 'app.bsky.feed.post';
+      }
+      const parts = deleteUri.replace('at://', '').split('/');
       const rkey = parts[parts.length - 1];
       const res = await fetch(`${BSKY}/com.atproto.repo.deleteRecord`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessJwt}` },
-        body: JSON.stringify({ repo: session.did, collection: 'app.bsky.feed.post', rkey })
+        body: JSON.stringify({ repo: session.did, collection, rkey })
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (post) { post.done = true; }
       deletedCount++;
-      logLine(`✓ Deleted: "${(post?.text || '').slice(0, 60)}${post?.text?.length > 60 ? '…' : ''}"`, 'log-ok');
+      const label = post?.isRepost
+        ? `✓ Un-reposted: "@${post.repostOf?.handle}" — "${(post.repostOf?.text || '').slice(0,50)}…"`
+        : `✓ Deleted: "${(post?.text || '').slice(0, 60)}${post?.text?.length > 60 ? '…' : ''}"`;
+      logLine(label, 'log-ok');
     } catch(e) {
       errors++;
       logLine(`✗ ${uri.split('/').pop()}: ${e.message}`, 'log-err');
