@@ -264,6 +264,14 @@
           <input type="number" id="f-quotes" value="0" min="0" oninput="applyFilters()">
         </div>
         <div class="filter-group-inline">
+          <span class="filter-label">📅 From date</span>
+          <input type="date" id="f-date-from" oninput="applyFilters()" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 10px;outline:none;width:150px;" onfocus="this.style.borderColor='var(--teal)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div class="filter-group-inline">
+          <span class="filter-label">📅 To date</span>
+          <input type="date" id="f-date-to" oninput="applyFilters()" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 10px;outline:none;width:150px;" onfocus="this.style.borderColor='var(--teal)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div class="filter-group-inline">
           <span class="filter-label">Show</span>
           <div style="display:flex;gap:6px;">
             <button class="btn btn-ghost btn-sm active" id="show-all-btn" onclick="setShowMode('all')">All</button>
@@ -506,6 +514,18 @@ function applyFilters() {
   if (scanMode === 'reposts') pool = pool.filter(p => p.isRepost);
   if (scanMode === 'quotes')  pool = pool.filter(p => p.isQuote);
 
+  // Date range filtering
+  const fromVal = $('f-date-from').value;
+  const toVal   = $('f-date-to').value;
+  if (fromVal) {
+    const fromDate = new Date(fromVal + 'T00:00:00');
+    pool = pool.filter(p => new Date(p.createdAt) >= fromDate);
+  }
+  if (toVal) {
+    const toDate = new Date(toVal + 'T23:59:59');
+    pool = pool.filter(p => new Date(p.createdAt) <= toDate);
+  }
+
   if (showMode === 'below') pool = pool.filter(p => isBelowThreshold(p, t));
   else if (showMode === 'above') pool = pool.filter(p => !isBelowThreshold(p, t));
 
@@ -725,6 +745,7 @@ async function doDeleteSelected() {
 function resetApp() {
   session = null; allPosts = []; filtered = []; cursor = null; deletedCount = 0;
   $('handle').value = ''; $('apppass').value = '';
+  $('f-date-from').value = ''; $('f-date-to').value = '';
   $('login-panel').style.display = '';
   $('curator-panel').style.display = 'none';
   $('log').innerHTML = ''; $('log').classList.remove('visible');
