@@ -231,8 +231,10 @@
       <button class="scan-opt" id="opt-myreposts"    onclick="toggleScanOpt('myreposts')">🔁 Their posts I reposted</button>
       <button class="scan-opt" id="opt-theirreposts" onclick="toggleScanOpt('theirreposts')">🔁 My posts reposted by others</button>
       <button class="scan-opt" id="opt-quotes"   onclick="toggleScanOpt('quotes')">Quote posts only</button>
-      <button class="scan-opt" id="opt-pictures" onclick="toggleScanOpt('pictures')">🖼 Pictures only</button>
-      <button class="scan-opt" id="opt-videos"   onclick="toggleScanOpt('videos')">🎬 Videos only</button>
+      <button class="scan-opt" id="opt-pictures"    onclick="toggleScanOpt('pictures')">🖼 My pictures</button>
+      <button class="scan-opt" id="opt-allpictures" onclick="toggleScanOpt('allpictures')">🖼 All pictures (inc. reposts)</button>
+      <button class="scan-opt" id="opt-videos"      onclick="toggleScanOpt('videos')">🎬 My videos</button>
+      <button class="scan-opt" id="opt-allvideos"  onclick="toggleScanOpt('allvideos')">🎬 All videos (inc. reposts)</button>
     </div>
 
     <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap;">
@@ -315,8 +317,10 @@
         <button class="btn btn-ghost btn-sm" id="sort-theirreposts" onclick="setSort('theirreposts')">🔁 Reposted by others</button>
         <button class="btn btn-ghost btn-sm" id="sort-replies" onclick="setSort('replies')">Replies</button>
         <button class="btn btn-ghost btn-sm" id="sort-quotes"    onclick="setSort('quotes')">Quotes</button>
-        <button class="btn btn-ghost btn-sm" id="sort-pictures" onclick="setSort('pictures')">🖼 Pictures</button>
-        <button class="btn btn-ghost btn-sm" id="sort-videos"   onclick="setSort('videos')">🎬 Videos</button>
+        <button class="btn btn-ghost btn-sm" id="sort-pictures"    onclick="setSort('pictures')">🖼 My pictures</button>
+        <button class="btn btn-ghost btn-sm" id="sort-allpictures" onclick="setSort('allpictures')">🖼 All pictures</button>
+        <button class="btn btn-ghost btn-sm" id="sort-videos"      onclick="setSort('videos')">🎬 My videos</button>
+        <button class="btn btn-ghost btn-sm" id="sort-allvideos"   onclick="setSort('allvideos')">🎬 All videos</button>
       </div>
 
       <!-- Threshold preview -->
@@ -372,7 +376,7 @@ const $ = id => document.getElementById(id);
 // ── Scan opt toggle ────────────────────────────────────────────────────────
 function toggleScanOpt(opt) {
   scanMode = opt;
-  ['all','posts','replies','reposts','myreposts','theirreposts','quotes','pictures','videos'].forEach(o => {
+  ['all','posts','replies','reposts','myreposts','theirreposts','quotes','pictures','allpictures','videos','allvideos'].forEach(o => {
     $('opt-' + o).classList.toggle('active', o === opt);
   });
   if (allPosts.length > 0) applyFilters();
@@ -589,8 +593,10 @@ function applyFilters() {
   if (scanMode === 'myreposts')    pool = pool.filter(p => p.isRepost && p.repostOf && p.repostOf.handle !== session.handle);
   if (scanMode === 'theirreposts') pool = pool.filter(p => !p.isRepost && p.reposts > 0);
   if (scanMode === 'quotes')   pool = pool.filter(p => p.isQuote);
-  if (scanMode === 'pictures') pool = pool.filter(p => p.images && p.images.length > 0);
-  if (scanMode === 'videos')   pool = pool.filter(p => p.hasVideo);
+  if (scanMode === 'pictures')    pool = pool.filter(p => !p.isRepost && p.images && p.images.length > 0);
+  if (scanMode === 'allpictures') pool = pool.filter(p => p.images && p.images.length > 0);
+  if (scanMode === 'videos')      pool = pool.filter(p => !p.isRepost && p.hasVideo);
+  if (scanMode === 'allvideos')   pool = pool.filter(p => p.hasVideo);
 
   // Date range filtering
   const fromVal = $('f-date-from').value;
@@ -618,6 +624,8 @@ function applyFilters() {
     if (sortMode === 'replies') return b.replies - a.replies;
     if (sortMode === 'quotes')   return b.quotes - a.quotes;
     if (sortMode === 'myreposts')    return (b.isRepost ? 1 : 0) - (a.isRepost ? 1 : 0);
+    if (sortMode === 'allvideos')   return (b.hasVideo ? 1 : 0) - (a.hasVideo ? 1 : 0);
+    if (sortMode === 'allpictures') return (b.images?.length || 0) - (a.images?.length || 0);
     if (sortMode === 'theirreposts') return b.reposts - a.reposts;
     if (sortMode === 'pictures') return (b.images?.length || 0) - (a.images?.length || 0);
     if (sortMode === 'videos')   return (b.hasVideo ? 1 : 0) - (a.hasVideo ? 1 : 0);
@@ -651,7 +659,7 @@ function toggleGallery() {
 
 function setSort(mode) {
   sortMode = mode;
-  ['date','likes','reposts','myreposts','theirreposts','replies','quotes','pictures','videos'].forEach(m => {
+  ['date','likes','reposts','myreposts','theirreposts','replies','quotes','pictures','allpictures','videos','allvideos'].forEach(m => {
     $(`sort-${m}`).classList.toggle('active', m === mode);
   });
   applyFilters();
