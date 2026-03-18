@@ -227,9 +227,9 @@
       <button class="scan-opt active" id="opt-all"     onclick="toggleScanOpt('all')">Everything</button>
       <button class="scan-opt" id="opt-posts"    onclick="toggleScanOpt('posts')">Posts only</button>
       <button class="scan-opt" id="opt-replies"  onclick="toggleScanOpt('replies')">Replies only</button>
-      <button class="scan-opt" id="opt-reposts"      onclick="toggleScanOpt('reposts')">Reposts only</button>
-      <button class="scan-opt" id="opt-myreposts"   onclick="toggleScanOpt('myreposts')">🔁 My reposts</button>
-      <button class="scan-opt" id="opt-theirreposts" onclick="toggleScanOpt('theirreposts')">🔁 Reposted by others</button>
+      <button class="scan-opt" id="opt-reposts"       onclick="toggleScanOpt('reposts')">All reposts</button>
+      <button class="scan-opt" id="opt-myreposts"    onclick="toggleScanOpt('myreposts')">🔁 Their posts I reposted</button>
+      <button class="scan-opt" id="opt-theirreposts" onclick="toggleScanOpt('theirreposts')">🔁 My posts reposted by others</button>
       <button class="scan-opt" id="opt-quotes"   onclick="toggleScanOpt('quotes')">Quote posts only</button>
       <button class="scan-opt" id="opt-pictures" onclick="toggleScanOpt('pictures')">🖼 Pictures only</button>
       <button class="scan-opt" id="opt-videos"   onclick="toggleScanOpt('videos')">🎬 Videos only</button>
@@ -444,8 +444,8 @@ async function fetchPosts(reset = false) {
   const maxPerRun = 500; // fetch up to 500 at a time to avoid hanging
 
   while (fetched < maxPerRun) {
-    // Always fetch with replies+reposts; we filter client-side by scanMode
-    const url = `${BSKY}/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(session.did)}&limit=100&filter=posts_and_author_threads` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+    // No filter param = returns everything (posts, replies, reposts). We filter client-side by scanMode.
+    const url = `${BSKY}/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(session.did)}&limit=100` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
     const res = await fetch(url, { headers: { Authorization: `Bearer ${session.accessJwt}` } });
     if (!res.ok) break;
     const data = await res.json();
@@ -586,7 +586,7 @@ function applyFilters() {
   if (scanMode === 'posts')   pool = pool.filter(p => !p.isReply && !p.isRepost && !p.isQuote);
   if (scanMode === 'replies') pool = pool.filter(p => p.isReply);
   if (scanMode === 'reposts')      pool = pool.filter(p => p.isRepost);
-  if (scanMode === 'myreposts')    pool = pool.filter(p => p.isRepost);  // your reposts of others
+  if (scanMode === 'myreposts')    pool = pool.filter(p => p.isRepost && p.repostOf && p.repostOf.handle !== session.handle);
   if (scanMode === 'theirreposts') pool = pool.filter(p => !p.isRepost && p.reposts > 0);
   if (scanMode === 'quotes')   pool = pool.filter(p => p.isQuote);
   if (scanMode === 'pictures') pool = pool.filter(p => p.images && p.images.length > 0);
