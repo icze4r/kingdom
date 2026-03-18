@@ -131,6 +131,10 @@
   .post-item.done { opacity: 0.4; border-color: var(--text-dimmer); }
   .post-item.protected { border-color: rgba(45,212,191,0.5); background: rgba(45,212,191,0.04); }
   .badge-protected { background: rgba(45,212,191,0.12); color: var(--teal); border: 1px solid rgba(45,212,191,0.3); }
+  .badge-video { background: rgba(192,132,252,0.12); color: #c084fc; border: 1px solid rgba(192,132,252,0.3); }
+  .post-thumb.gallery-size { width: 100%; height: auto; max-height: 480px; object-fit: contain; border-radius: 6px; }
+  body.gallery-mode .post-images { flex-direction: column; gap: 10px; }
+  body.gallery-mode .post-list { max-height: none; }
 
   .post-cb { width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; flex-shrink: 0; margin-top: 3px; }
 
@@ -222,6 +226,8 @@
       <button class="scan-opt" id="opt-replies"  onclick="toggleScanOpt('replies')">Replies only</button>
       <button class="scan-opt" id="opt-reposts"  onclick="toggleScanOpt('reposts')">Reposts only</button>
       <button class="scan-opt" id="opt-quotes"   onclick="toggleScanOpt('quotes')">Quote posts only</button>
+      <button class="scan-opt" id="opt-pictures" onclick="toggleScanOpt('pictures')">🖼 Pictures only</button>
+      <button class="scan-opt" id="opt-videos"   onclick="toggleScanOpt('videos')">🎬 Videos only</button>
     </div>
 
     <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap;">
@@ -291,7 +297,10 @@
         </div>
       </div>
 
-      <!-- Sort bar -->
+      <!-- Gallery toggle + Sort bar -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <button class="btn btn-ghost btn-sm" id="gallery-btn" onclick="toggleGallery()" title="Gallery mode — view all images at full width">🖼 Gallery mode</button>
+      </div>
       <div class="sort-bar">
         <span class="sort-label">Sort by:</span>
         <button class="btn btn-ghost btn-sm active" id="sort-date" onclick="setSort('date')">Date ↓</button>
@@ -341,7 +350,8 @@ let session = null;
 let allPosts = [];       // all fetched posts
 let filtered = [];       // currently displayed posts
 let cursor = null;       // for pagination
-let scanMode = 'all'; // all | posts | replies | reposts | quotes
+let scanMode = 'all'; // all | posts | replies | reposts | quotes | pictures | videos
+let galleryMode = false;
 let sortMode = 'date';
 let showMode = 'all';
 let deletedCount = 0;
@@ -353,7 +363,7 @@ const $ = id => document.getElementById(id);
 // ── Scan opt toggle ────────────────────────────────────────────────────────
 function toggleScanOpt(opt) {
   scanMode = opt;
-  ['all','posts','replies','reposts','quotes'].forEach(o => {
+  ['all','posts','replies','reposts','quotes','pictures','videos'].forEach(o => {
     $('opt-' + o).classList.toggle('active', o === opt);
   });
   if (allPosts.length > 0) applyFilters();
@@ -444,8 +454,10 @@ async function fetchPosts(reset = false) {
         post.record?.embed?.$type === 'app.bsky.embed.recordWithMedia'
       );
 
-      // Extract image thumbnails from embed
+      // Extract image thumbnails and video from embed
       const images = [];
+      let hasVideo = false;
+      let videoThumb = null;
       const embed = post.embed || post.record?.embed;
       if (embed) {
         if (embed.$type === 'app.bsky.embed.images#view' || embed.$type === 'app.bsky.embed.images') {
@@ -454,6 +466,14 @@ async function fetchPosts(reset = false) {
         if (embed.$type === 'app.bsky.embed.recordWithMedia#view' || embed.$type === 'app.bsky.embed.recordWithMedia') {
           const media = embed.media || {};
           (media.images || []).forEach(img => { if (img.thumb || img.fullsize) images.push(img.thumb || img.fullsize); });
+          if (media.$type === 'app.bsky.embed.video#view' || media.$type === 'app.bsky.embed.video') {
+            hasVideo = true;
+            videoThumb = media.thumbnail || null;
+          }
+        }
+        if (embed.$type === 'app.bsky.embed.video#view' || embed.$type === 'app.bsky.embed.video') {
+          hasVideo = true;
+          videoThumb = embed.thumbnail || null;
         }
       }
 
@@ -473,6 +493,8 @@ async function fetchPosts(reset = false) {
         isRepost,
         isQuote,
         images,
+        hasVideo,
+        videoThumb,
         postUrl,
         done: false
       });
@@ -534,7 +556,9 @@ function applyFilters() {
   if (scanMode === 'posts')   pool = pool.filter(p => !p.isReply && !p.isRepost && !p.isQuote);
   if (scanMode === 'replies') pool = pool.filter(p => p.isReply);
   if (scanMode === 'reposts') pool = pool.filter(p => p.isRepost);
-  if (scanMode === 'quotes')  pool = pool.filter(p => p.isQuote);
+  if (scanMode === 'quotes')   pool = pool.filter(p => p.isQuote);
+  if (scanMode === 'pictures') pool = pool.filter(p => p.images && p.images.length > 0);
+  if (scanMode === 'videos')   pool = pool.filter(p => p.hasVideo);
 
   // Date range filtering
   const fromVal = $('f-date-from').value;
@@ -780,6 +804,10 @@ function resetApp() {
   session = null; allPosts = []; filtered = []; cursor = null; deletedCount = 0;
   $('handle').value = ''; $('apppass').value = '';
   $('f-date-from').value = ''; $('f-date-to').value = ''; $('f-protect-words').value = '';
+  galleryMode = false;
+  document.body.classList.remove('gallery-mode');
+  const gb = $('gallery-btn');
+  if (gb) { gb.classList.remove('active'); gb.textContent = '\u{1F5BC} Gallery mode'; }
   $('login-panel').style.display = '';
   $('curator-panel').style.display = 'none';
   $('log').innerHTML = ''; $('log').classList.remove('visible');
