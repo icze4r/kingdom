@@ -4,7 +4,7 @@
 
 Made by Durandal
 
-an [ICZE4R](https://bsky.app/profile/iczer.one) • [→ Open the tool](https://icze4r.github.io/kingdom/index.html)
+an [ICZE4R](https://bsky.app/profile/iczer.one) joint • [→ Open the tool](https://icze4r.github.io/kingdom/index.html)
 
 ---
 
