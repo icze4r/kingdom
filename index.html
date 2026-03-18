@@ -129,6 +129,8 @@
   .post-item:hover { border-color: var(--teal); }
   .post-item.below-threshold { border-color: rgba(255,107,107,0.3); background: rgba(255,107,107,0.02); }
   .post-item.done { opacity: 0.4; border-color: var(--text-dimmer); }
+  .post-item.protected { border-color: rgba(45,212,191,0.5); background: rgba(45,212,191,0.04); }
+  .badge-protected { background: rgba(45,212,191,0.12); color: var(--teal); border: 1px solid rgba(45,212,191,0.3); }
 
   .post-cb { width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; flex-shrink: 0; margin-top: 3px; }
 
@@ -270,6 +272,14 @@
         <div class="filter-group-inline">
           <span class="filter-label">📅 To date</span>
           <input type="date" id="f-date-to" oninput="applyFilters()" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 10px;outline:none;width:150px;" onfocus="this.style.borderColor='var(--teal)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div class="filter-group-inline" style="flex:1;min-width:200px;">
+          <span class="filter-label">🛡 Protect posts containing</span>
+          <input type="text" id="f-protect-words" placeholder="e.g. pinned important album" oninput="applyFilters()"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 10px;outline:none;"
+            onfocus="this.style.borderColor='var(--teal)'" onblur="this.style.borderColor='var(--border)'"
+            title="Space-separated words. Any post containing these words will be excluded from selection and protected from deletion.">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--text-dimmer);margin-top:3px;">Space-separated. Matching posts are protected from deletion.</span>
         </div>
         <div class="filter-group-inline">
           <span class="filter-label">Show</span>
@@ -498,6 +508,18 @@ function getThresholds() {
   };
 }
 
+function getProtectedWords() {
+  const raw = $('f-protect-words')?.value || '';
+  return raw.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+function isProtected(post) {
+  const words = getProtectedWords();
+  if (!words.length) return false;
+  const text = (post.text || '').toLowerCase();
+  return words.some(w => text.includes(w));
+}
+
 function isBelowThreshold(post, t) {
   return post.likes < t.likes || post.reposts < t.reposts || post.replies < t.replies || post.quotes < t.quotes;
 }
@@ -525,6 +547,9 @@ function applyFilters() {
     const toDate = new Date(toVal + 'T23:59:59');
     pool = pool.filter(p => new Date(p.createdAt) <= toDate);
   }
+
+  // Exclude protected posts from the deletable pool (still show them, just locked)
+  // We mark them but don't remove from display — handled in render
 
   if (showMode === 'below') pool = pool.filter(p => isBelowThreshold(p, t));
   else if (showMode === 'above') pool = pool.filter(p => !isBelowThreshold(p, t));
@@ -579,14 +604,17 @@ function renderPosts() {
 
   filtered.forEach(post => {
     const below = isBelowThreshold(post, t);
+    const protected_ = isProtected(post);
     const li = document.createElement('li');
-    li.className = 'post-item' + (below ? ' below-threshold' : '');
+    li.className = 'post-item' + (below && !protected_ ? ' below-threshold' : '') + (protected_ ? ' protected' : '');
     li.dataset.uri = post.uri;
 
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.className = 'post-cb';
     cb.dataset.uri = post.uri;
+    cb.disabled = protected_;
+    cb.title = protected_ ? 'Protected — contains a protected word' : '';
     cb.addEventListener('change', updateStats);
 
     const body = document.createElement('div');
@@ -626,10 +654,16 @@ function renderPosts() {
     }).join('');
 
     meta.append(date, typeTag, stats);
-    if (below) {
+    if (below && !protected_) {
       const badge = document.createElement('span');
       badge.className = 'threshold-badge';
       badge.textContent = 'below threshold';
+      meta.appendChild(badge);
+    }
+    if (protected_) {
+      const badge = document.createElement('span');
+      badge.className = 'badge badge-protected';
+      badge.textContent = '🛡 protected';
       meta.appendChild(badge);
     }
 
@@ -745,7 +779,7 @@ async function doDeleteSelected() {
 function resetApp() {
   session = null; allPosts = []; filtered = []; cursor = null; deletedCount = 0;
   $('handle').value = ''; $('apppass').value = '';
-  $('f-date-from').value = ''; $('f-date-to').value = '';
+  $('f-date-from').value = ''; $('f-date-to').value = ''; $('f-protect-words').value = '';
   $('login-panel').style.display = '';
   $('curator-panel').style.display = 'none';
   $('log').innerHTML = ''; $('log').classList.remove('visible');
